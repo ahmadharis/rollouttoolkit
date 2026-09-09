@@ -1,0 +1,257 @@
+# ===========================================================================
+# apply-rollout settings -- template
+#
+# Author: Haris Ahmad -- Smart IS
+#
+# Copy this file to apply-rollout.conf beside the script and edit the values:
+#
+#     cp apply-rollout.conf.example apply-rollout.conf
+#
+# The file is READ, never sourced. No value can execute code or overwrite the
+# tool's internal state. Unknown keys are ignored, so a settings file carrying
+# keys for the other TYPE, or keys from an older version, does not break a run.
+#
+# An absent or empty file is fine. The tool then behaves as if no settings were
+# given, which is deliberately the SAFE default: TYPE falls back to rollout,
+# and rollout IS the no-conventions behaviour -- the manifest is taken
+# literally and nothing is written that the package did not name.
+#
+# Format:   KEY=value
+#   - comments (#) and blank lines are ignored
+#   - surrounding quotes are stripped
+#   - trailing slashes are normalised away
+#   - Windows line endings are tolerated
+# ===========================================================================
+
+
+# ===========================================================================
+# The two types, and why hotfix needs so few keys
+#
+# TYPE selects how a manifest path becomes a destination, and nothing else.
+# Directive parsing, execution, collision detection, logging and exit status
+# are identical under both.
+#
+#     rollout  the manifest is taken literally. Nothing is derived, so the
+#              three REFSDIR_* keys are the only thing that can place the REFS
+#              variable. This is the tool's ORIGINAL behaviour, and the
+#              DEFAULT when TYPE is blank or absent.
+#
+#     hotfix   paths are corrected against conventions the target declares.
+#              The REFSDIR_* keys are inert here; the list below is derived
+#              instead.
+#
+# Under hotfix, everything the tool needs is DERIVED from the target repository
+# at run time, by reading what the repository itself declares:
+#
+#     the refs root ............ the directory holding the shared patch config
+#                                and build file
+#     the patch source tree .... the source-dir the patch config declares
+#     valid deploy kinds ....... the kinds the patch config's load target lists
+#     the deployed-shape wrapper whatever sits between the deploy directory and
+#                                the first segment naming a valid kind
+#     asset kinds .............. the directories the build file copies out of
+#     source kinds ............. the directories the config's includes read from
+#     bundle target names ...... declared in the patch config
+#     the copy destination ..... the expression the build file's own copy
+#                                entries already write to
+#     the deployed web tree .... named by the build file's copy destination
+#     the upgrade version ...... the highest version directory present
+#
+# These are not settings because the target already declares them, and a stale
+# setting would be worse than no setting. A platform rename is followed without
+# touching this file.
+#
+# A derivation that finds nothing simply disables the convention it supports;
+# resolution then falls back to the manifest. An unfamiliar target degrades to
+# manifest-only placement rather than failing or guessing.
+#
+# Under rollout none of the above is read at all. A rollout run has no use for
+# any of it, and deriving facts it would then ignore would invite them being
+# consulted by accident.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# TYPE -- which resolution this run uses.
+#
+#   rollout        the manifest decides every destination (see above)
+#   hotfix         paths are corrected against declared conventions
+#   blank / absent rollout
+#
+# Matched without regard to case. An UNRECOGNISED VALUE IS A SETUP ERROR, exit
+# 2, refused before the run creates so much as a log file -- never a silent
+# fallback to the default. A misspelled type that quietly selected the other
+# resolution would write the wrong tree while reporting success, which is the
+# one failure this tool exists to remove.
+#
+# Set this EXPLICITLY on a destination that needs hotfix. Leaving it blank
+# there does not preserve hotfix behaviour -- blank means rollout.
+# ---------------------------------------------------------------------------
+TYPE=
+
+
+# ---------------------------------------------------------------------------
+# LOG_DIR -- where run logs are written.
+#
+# This is a property of the MACHINE, not of the destination, which is why it is
+# a setting at all.
+#
+#   absolute path  -> used as-is
+#   relative path  -> placed beside the script
+#   blank / absent -> the default log/ directory beside the script
+#
+# One file per run, timestamped, tagged with the active modes. A run never
+# overwrites another run's log: concurrent runs starting in the same second
+# each get their own numbered file.
+# ---------------------------------------------------------------------------
+LOG_DIR=
+
+
+# ---------------------------------------------------------------------------
+# JAR_DIR -- destination for jars the manifest names in the GENERIC library
+# directory.
+#
+# Two library locations are both legitimate, and a target may standardise on
+# one. This key exists only for that choice.
+#
+#   blank / absent -> the manifest decides; jars land exactly where it says
+#   set            -> a jar the manifest names as  lib/<name>.jar  goes here
+#                     instead, keeping its own filename
+#
+# Never affects:
+#   - paths the manifest already names in the java library directory: those
+#     always land there, un-redirected
+#   - anything in the generic library directory that is not a .jar
+#
+# Relative values are taken from the target directory; absolute values are used
+# as-is.
+#
+# Note: if you point this at a directory the repository ignores, the jars are
+# delivered but untracked. The run reports any such destination -- everything
+# delivered must be trackable.
+# ---------------------------------------------------------------------------
+JAR_DIR=
+
+
+# ---------------------------------------------------------------------------
+# REFSDIR_ROOT / REFSDIR_WEB / REFSDIR_DEPLOY -- ROLLOUT ONLY.
+#
+# Where the REFS variable is placed. Under hotfix these are INERT: the refs
+# root and the deployed-shape wrapper are derived from the target instead, and
+# nothing is written to the deployed web tree at all. A run reports them as
+# inert rather than failing, so one settings file can serve both types.
+#
+# The two subpaths are relative to the root, and each REPLACES the segment that
+# selected it rather than nesting beneath it:
+#
+#     $REFSDIR/web/<rest>     ->  <target>/<ROOT>/<WEB>/<rest>
+#     $REFSDIR/deploy/<rest>  ->  <target>/<ROOT>/<DEPLOY>/<rest>
+#     $REFSDIR/<rest>         ->  <target>/<ROOT>/<rest>
+#
+# This is the original meaning of these three keys, unchanged, so a settings
+# file written for the original tool still resolves exactly as it always did.
+#
+# The REFS variable is the ONLY one placed by settings. Every other directory
+# variable maps to the target directory, so LES-side content is never moved.
+#
+#   REFSDIR_ROOT    blank -> webclient
+#   REFSDIR_WEB     blank -> web
+#   REFSDIR_DEPLOY  blank -> deploy
+#
+# With all three blank, $REFSDIR/web/a/b.js lands at
+# <target>/webclient/web/a/b.js -- the plainest possible reading.
+# ---------------------------------------------------------------------------
+REFSDIR_ROOT=
+REFSDIR_WEB=
+REFSDIR_DEPLOY=
+# ---------------------------------------------------------------------------
+# COMBINE_PATHS -- base path(s) holding per-table load directories, used by
+# MANUAL consolidation (--combine). Several paths may be given, space separated.
+#
+#   blank / absent -> --combine must be given paths on the command line,
+#                     otherwise it stops with a setup error
+#   set            -> --combine uses these when no paths are passed
+#
+# --combine ALSO requires --folders naming the table folders to rebuild. There is
+# no "every folder under the base path" default, and manual consolidation never
+# deletes a combined artifact.
+#
+# A convenience only, to spare repeating the same paths on every manual run.
+# There is deliberately no default: guessing where load data lives is exactly
+# the kind of inference this tool exists to remove.
+#
+# Automatic consolidation during apply and undo does NOT use this key -- it
+# works from the directories the run actually touched.
+# ---------------------------------------------------------------------------
+COMBINE_PATHS=
+
+
+# ---------------------------------------------------------------------------
+# COMBINE_EXCLUDE -- data trees that are delivered but never consolidated.
+#
+# A destination may keep more than one per-table data tree: records to LOAD and
+# records to DELETE. They look identical -- a control file beside a directory of
+# the same name -- and their table names collide, but their control files are
+# opposite operations:
+#
+#     load tree    <table>.ctl : publish data where table = ...
+#     delete tree  <table>.ctl : [delete from <table> where ...]
+#
+# Only one of them can own a given combined file in the version directory, and
+# nothing in the destination says which. So the delete tree is named here.
+#
+#   blank / absent -> nothing is excluded
+#   set            -> these space-separated path segments are excluded
+#
+# There is no built-in default. A tree name compiled into the tool would be
+# wrong for every other destination and invisible to whoever runs against one,
+# so an exclusion is stated here or it does not exist.
+#
+# The excluded tree's files are still delivered normally -- only its combined
+# artifact is not built, and the run log says so every time. If you later give
+# the delete tree a real destination of its own, remove it from this list.
+# ---------------------------------------------------------------------------
+COMBINE_EXCLUDE=
+
+
+# ===========================================================================
+# Worked examples
+#
+# None of the values below are real -- copy the shape, not the names. Both
+# assume the target's own root is /opt/app/LES, with db/, src/ and the rest
+# sitting directly under it.
+#
+# A file this destination doesn't set at all keeps its safe default: an
+# absent or partial settings file is a fully supported, ordinary way to run
+# this tool, not a shortcut. Neither example below lists a key it has no use
+# for.
+#
+# Rollout, with the webclient references kept under refs/ instead of the
+# tool's default webclient/:
+#
+#     TYPE=rollout
+#     REFSDIR_ROOT=refs
+#     REFSDIR_WEB=web
+#     REFSDIR_DEPLOY=deploy
+#
+# Reading it: rollout resolution, log files land in the default log/ next to
+# the script, jars land wherever the manifest already says (JAR_DIR is not
+# set), and $REFSDIR/web/a/b.js in a manifest now lands at
+# /opt/app/LES/refs/web/a/b.js instead of the default
+# /opt/app/LES/webclient/web/a/b.js.
+#
+# Hotfix, with one delete tree excluded from consolidation:
+#
+#     TYPE=hotfix
+#     LOG_DIR=/var/log/rollout
+# 
+#
+# Reading it: hotfix resolution, logs collected in one place across every
+# destination on this machine, jars land wherever the manifest already says,
+# and the widget_retired_queue tree is a delete tree at this destination --
+# its files still get delivered, its combined artifact does not get built.
+# REFSDIR_ROOT/WEB/DEPLOY are not set because they are inert under hotfix
+# anyway. COMBINE_PATHS is not set either: it only saves typing a base path
+# that --combine would otherwise take on the command line, so a destination
+# that always passes it explicitly has no use for it.
+# ===========================================================================

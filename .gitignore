@@ -1,0 +1,12 @@
+# Internal reference material, never published: design spec, private notes.
+/docs/
+
+# Run logs -- one file per run, real destination paths and data inside.
+/log/
+
+# The real, site-specific settings file. Only apply-rollout.conf.example ships.
+/apply-rollout.conf
+
+# Transient files the tool writes while replacing a file atomically; cleaned
+# up on success, but left behind if a run is interrupted mid-write.
+*.tmp[0-9]*
