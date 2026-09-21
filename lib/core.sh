@@ -12,6 +12,7 @@
 DRY_RUN=0                 # --dry-run   : plan and report, write nothing
 UNDO=0                    # --undo      : reverse REPLACE directives
 COMBINE_MODE=0            # --combine   : manual consolidation, no directives
+DDL_MODE=0                # --rebuild-ddl-list : manual ddl list rebuild, no directives
 VERSION_OVERRIDE=""       # --version N : rewrite year-leading version values
 
 # --- run inputs -----------------------------------------------------------

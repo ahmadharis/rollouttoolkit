@@ -95,6 +95,7 @@ Setting `TYPE=hotfix` in a config file changes that resolution logic to be conve
 ```
 apply-rollout.sh [options] <package_dir> <target_dir>
 apply-rollout.sh --combine <paths...> --folders <a,b> [--target-version <v>]
+apply-rollout.sh --rebuild-ddl-list <paths...> [--target-version <v>]
 
 Options:
   --dry-run              report what would happen; change nothing
@@ -104,7 +105,15 @@ Options:
                          or undo, it has no standalone form
   --combine <paths...>   manual load-data consolidation, processing no directives
   --folders <list>       with --combine: the table folders to rebuild (required)
-  --target-version <v>   with --combine: write here instead of the highest version
+  --rebuild-ddl-list <paths...>
+                         manual ddl include-list rebuild, processing no
+                         directives. Rebuilds 001-ddl_alters.sql from the
+                         schema files currently in the resolved version
+                         directory; copies nothing in, so a schema file that
+                         hasn't already been placed there is not this mode's
+                         job
+  --target-version <v>   with --combine or --rebuild-ddl-list: write here
+                         instead of the highest version
   -h, --help             print usage and exit
 
 Exit status:
@@ -134,6 +143,16 @@ Set `TYPE` explicitly in `apply-rollout.conf`. Leaving it blank means `rollout`.
 This rebuilds `les_mls_cat.csv` and `les_opt_ath.csv` from every csv now in each folder, and writes both into the highest version directory under `db/upgrade`. Both `--combine` and `--folders` are required. There's no default base path and no "every folder" default. It never deletes anything, and `--dry-run` works here too.
 
 Useful after hand editing a record file directly.
+
+## Manual ddl list rebuild
+
+`--rebuild-ddl-list` keeps a version directory's `001-ddl_alters.sql` (or whatever it's already named) in sync with the schema files (`.tbl`, `.iesql`, `.idx` -- classified by content, never by extension) currently sitting inside it, the same way `--combine` keeps a combined csv in sync with its record files. It resolves each base path to a version directory exactly like `--combine` does (highest present, or `--target-version` to override), and rebuilds that directory's include list from what's there now:
+
+```sh
+./apply-rollout.sh --rebuild-ddl-list /opt/app/LES/db/data/bootstraponly
+```
+
+Unlike `promote_ddl` under a real hotfix apply, this never copies a schema file INTO the version directory -- it has no package to copy from. It only rebuilds the list from files already there, so it's the right tool when schema fragments are committed directly into the version directory (the way csv source records are committed into `bootstraponly`) rather than delivered through a package. A base path shared with a `--combine` invocation resolves to the same version directory, without either mode needing to know about the other. `--dry-run` works here too, and it never deletes anything beyond removing a now-empty include list.
 
 ## Configuration
 

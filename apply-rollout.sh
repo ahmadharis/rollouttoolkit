@@ -62,6 +62,7 @@ usage() {
 Usage:
   apply-rollout.sh [options] <package_dir> <target_dir>
   apply-rollout.sh --combine <paths...> --folders <a,b> [--target-version <v>]
+  apply-rollout.sh --rebuild-ddl-list <paths...> [--target-version <v>]
 
 Arguments:
   <package_dir>  the rollout package: manifest(s) plus a pkg/ payload tree
@@ -76,7 +77,17 @@ Options:
   --combine <paths...>   manual load-data consolidation, processing no directives.
                          Requires --folders; never deletes anything
   --folders <list>       with --combine: the table folders to rebuild (required)
-  --target-version <v>   with --combine: write here instead of the highest version
+  --rebuild-ddl-list <paths...>
+                         manual ddl include-list rebuild, processing no
+                         directives. Rebuilds 001-ddl_alters.sql (or whatever
+                         it is already named) from the schema files currently
+                         in the resolved version directory -- it copies
+                         nothing in, so a schema file that hasn't already
+                         been placed there is not this mode's job. A base
+                         path shared with a --combine run resolves to the
+                         same version directory, independently of it.
+  --target-version <v>   with --combine or --rebuild-ddl-list: write here
+                         instead of the highest version
   -h, --help             print this and exit
   --                     end of options
 
@@ -93,6 +104,7 @@ USAGE
 COMBINE_PATHS_ARG=""
 COMBINE_FOLDERS=""
 COMBINE_TARGET_VERSION=""
+DDL_PATHS_ARG=""
 
 parse_args() {
     local positional=0
@@ -101,6 +113,7 @@ parse_args() {
             --dry-run) DRY_RUN=1 ;;
             --undo)    UNDO=1 ;;
             --combine) COMBINE_MODE=1 ;;
+            --rebuild-ddl-list) DDL_MODE=1 ;;
             --version)
                 [ "$#" -ge 2 ] || die "--version needs a value"
                 shift; VERSION_OVERRIDE=$1 ;;
@@ -117,6 +130,8 @@ $(usage)" ;;
             *)
                 if [ "$COMBINE_MODE" -eq 1 ]; then
                     COMBINE_PATHS_ARG="${COMBINE_PATHS_ARG:+$COMBINE_PATHS_ARG }$1"
+                elif [ "$DDL_MODE" -eq 1 ]; then
+                    DDL_PATHS_ARG="${DDL_PATHS_ARG:+$DDL_PATHS_ARG }$1"
                 elif [ "$positional" -eq 0 ]; then
                     PACKAGE_DIR=$1; positional=1
                 elif [ "$positional" -eq 1 ]; then
@@ -131,19 +146,27 @@ $(usage)" ;;
     while [ "$#" -gt 0 ]; do
         if [ "$COMBINE_MODE" -eq 1 ]; then
             COMBINE_PATHS_ARG="${COMBINE_PATHS_ARG:+$COMBINE_PATHS_ARG }$1"
+        elif [ "$DDL_MODE" -eq 1 ]; then
+            DDL_PATHS_ARG="${DDL_PATHS_ARG:+$DDL_PATHS_ARG }$1"
         elif [ "$positional" -eq 0 ]; then PACKAGE_DIR=$1; positional=1
         elif [ "$positional" -eq 1 ]; then TARGET_DIR=$1; positional=2
         else die "unexpected argument: $1"; fi
         shift
     done
 
-    # --version has no meaning on its own: there is no package to read a
-    # version from without a rollout operation.
-    if [ -n "$VERSION_OVERRIDE" ] && [ "$COMBINE_MODE" -eq 1 ]; then
-        die "--version is a modifier on apply, dry run or undo; it has no meaning with --combine"
+    # Ambiguous, not additive: each is its own complete run with its own
+    # tallies and exit status. Doing both would mean silently picking one.
+    if [ "$COMBINE_MODE" -eq 1 ] && [ "$DDL_MODE" -eq 1 ]; then
+        die "--combine and --rebuild-ddl-list are two separate runs; pass one at a time"
     fi
 
-    if [ "$COMBINE_MODE" -eq 0 ]; then
+    # --version has no meaning on its own: there is no package to read a
+    # version from without a rollout operation.
+    if [ -n "$VERSION_OVERRIDE" ] && { [ "$COMBINE_MODE" -eq 1 ] || [ "$DDL_MODE" -eq 1 ]; }; then
+        die "--version is a modifier on apply, dry run or undo; it has no meaning with --combine or --rebuild-ddl-list"
+    fi
+
+    if [ "$COMBINE_MODE" -eq 0 ] && [ "$DDL_MODE" -eq 0 ]; then
         [ -n "$PACKAGE_DIR" ] || { usage >&2; die "no package directory given"; }
         [ -n "$TARGET_DIR" ]  || { usage >&2; die "no target directory given"; }
         [ -d "$PACKAGE_DIR" ] || die "package directory not found: $PACKAGE_DIR"
@@ -159,10 +182,11 @@ banner() {
     local mode="apply"
     [ "$UNDO" -eq 1 ]         && mode="undo"
     [ "$COMBINE_MODE" -eq 1 ] && mode="combine"
+    [ "$DDL_MODE" -eq 1 ]     && mode="rebuild-ddl-list"
     [ "$DRY_RUN" -eq 1 ]      && mode="$mode (dry run -- nothing will be written)"
     log_info "mode             : $mode"
-    [ "$COMBINE_MODE" -eq 0 ] && log_info "package          : $PACKAGE_DIR"
-    [ "$COMBINE_MODE" -eq 0 ] && log_info "target           : $TARGET_DIR"
+    [ "$COMBINE_MODE" -eq 0 ] && [ "$DDL_MODE" -eq 0 ] && log_info "package          : $PACKAGE_DIR"
+    [ "$COMBINE_MODE" -eq 0 ] && [ "$DDL_MODE" -eq 0 ] && log_info "target           : $TARGET_DIR"
     [ -n "$VERSION_OVERRIDE" ] && log_info "version override : $VERSION_OVERRIDE"
     log_info "log              : $LOG_FILE"
     log_settings
@@ -184,6 +208,15 @@ main() {
     if [ "$COMBINE_MODE" -eq 1 ]; then
         combine_run
         report_tallies_combine
+        log_blank
+        log_info "log written to $LOG_FILE"
+        exit_status
+        return $?
+    fi
+
+    if [ "$DDL_MODE" -eq 1 ]; then
+        rebuild_ddl_run
+        report_tallies_ddl
         log_blank
         log_info "log written to $LOG_FILE"
         exit_status

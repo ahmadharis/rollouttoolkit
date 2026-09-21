@@ -200,6 +200,17 @@ report_tallies_combine() {
 }
 
 # ---------------------------------------------------------------------------
+# report_tallies_ddl -- the summary for --rebuild-ddl-list, the ddl
+# counterpart to report_tallies_combine.
+# ---------------------------------------------------------------------------
+report_tallies_ddl() {
+    log_head "summary"
+    log_info "ddl lists rebuilt: $DDL_LISTS_REBUILT"
+    log_info "warnings         : $DDL_WARNINGS"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # exit_status
 #   0  completed with no failed actions
 #   1  completed, one or more actions failed

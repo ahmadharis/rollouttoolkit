@@ -18,6 +18,12 @@ DDL_P_SEQUENCES=3
 DDL_P_VIEWS=4
 DDL_P_CARRIED=9          # entries the tool did not write and cannot classify
 
+# Tallied by rebuild_ddl_list specifically -- how many include lists it wrote
+# or removed. Distinct from DDL_PROMOTED, which counts schema files a package
+# apply copied in; --rebuild-ddl-list copies nothing, so that counter would
+# always read zero there.
+DDL_LISTS_REBUILT=0
+
 DDL_PROMOTED=0
 DDL_WARNINGS=0
 DDL_LIST_NAME="001-ddl_alters.sql"
@@ -504,12 +510,34 @@ promote_ddl() {
     [ "$any" -eq 1 ] || return 0
     [ "$DRY_RUN" -eq 1 ] && return 0
 
-    ddl_list_path "$vdir" || log_info "  ddl: no include list in $D_UPGRADE_VERSION; creating ${DDL_LIST##*/}"
+    rebuild_ddl_list "$vdir"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# rebuild_ddl_list <version-dir>
+#
+# The half of DDL promotion that needs no package plan: given a version
+# directory, rebuild its include list from whatever schema files are CURRENTLY
+# inside it. promote_ddl (apply/undo) reaches this after copying files in;
+# rebuild_ddl_run (--rebuild-ddl-list) reaches it directly, with nothing to
+# copy, because the files it cares about already live in the version
+# directory by the time a manual run has any reason to touch it.
+#
+# Uses $D_UPGRADE_PARENT purely as a display name and as ddl_header's fallback
+# search root (sibling version directories to borrow a header from). The
+# caller sets it -- promote_ddl already has it from stage 2; rebuild_ddl_run
+# sets it itself, since --rebuild-ddl-list derives no destination facts.
+# ---------------------------------------------------------------------------
+rebuild_ddl_list() {
+    local vdir=$1
+    local vname=${vdir##*/}
+
+    ddl_list_path "$vdir" || log_info "  ddl: no include list in $vname; creating ${DDL_LIST##*/}"
     ddl_unclassified "$DDL_LIST" "$vdir"
     ddl_header "$DDL_LIST"
     ddl_scan_version "$vdir"
 
-    local line
     if [ -n "$DDL_KEEP" ]; then
         local n=${#DDL_K[@]}
         DDL_K[$n]="carried-forward"
@@ -526,8 +554,12 @@ promote_ddl() {
     done
     if [ "$groups" -eq 0 ]; then
         if [ -f "$DDL_LIST" ]; then
-            if rm -f "$DDL_LIST" 2>/dev/null; then
-                log_info "  ddl: no schema left in $D_UPGRADE_VERSION; removed ${DDL_LIST##*/}"
+            if [ "$DRY_RUN" -eq 1 ]; then
+                log_info "  ddl: would remove ${DDL_LIST##*/} (no schema left in $vname)"
+                DDL_LISTS_REBUILT=$((DDL_LISTS_REBUILT + 1))
+            elif rm -f "$DDL_LIST" 2>/dev/null; then
+                log_info "  ddl: no schema left in $vname; removed ${DDL_LIST##*/}"
+                DDL_LISTS_REBUILT=$((DDL_LISTS_REBUILT + 1))
             else
                 log_error "  ddl: could not remove the now-empty ${DDL_LIST##*/}"
                 DDL_WARNINGS=$((DDL_WARNINGS + 1))
@@ -536,13 +568,81 @@ promote_ddl() {
         return 0
     fi
 
+    if [ "$DRY_RUN" -eq 1 ]; then
+        log_info "  ddl: would rebuild ${DDL_LIST##*/} in $vname"
+        DDL_LISTS_REBUILT=$((DDL_LISTS_REBUILT + 1))
+        return 0
+    fi
+
     if ddl_write_list "$DDL_LIST" "$DDL_HEADER"; then
-        log_info "  ddl: rebuilt ${DDL_LIST##*/} in $D_UPGRADE_VERSION"
+        log_info "  ddl: rebuilt ${DDL_LIST##*/} in $vname"
+        DDL_LISTS_REBUILT=$((DDL_LISTS_REBUILT + 1))
     else
         log_error "  ddl: could not write ${DDL_LIST##*/}"
         DDL_WARNINGS=$((DDL_WARNINGS + 1))
     fi
 
     ddl_validate "$DDL_LIST" "$vdir"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# rebuild_ddl_run
+#
+# Manual entry point for --rebuild-ddl-list, the DDL-list counterpart to
+# combine_run. Resolves each given base path to a version directory the exact
+# same way --combine does (find_upgrade_for, or --target-version to override
+# it), then rebuilds that directory's include list. A base path shared with a
+# --combine invocation naturally resolves to the same version directory here,
+# without either mode needing to know about the other.
+# ---------------------------------------------------------------------------
+rebuild_ddl_run() {
+    local paths base vdir seen=""
+
+    paths=${DDL_PATHS_ARG:-$SET_COMBINE_PATHS}
+    [ -n "$paths" ] || die "--rebuild-ddl-list needs a base path, either on the command line or as COMBINE_PATHS in the settings file.
+  There is no default: where the upgrade tree lives is not something this tool guesses."
+
+    log_head "manual ddl list rebuild"
+
+    for base in $paths; do
+        is_abs "$base" || base="$PWD/$base"
+        normalize_path "$base"; base=$NORMALIZED
+        if [ ! -d "$base" ]; then
+            log_error "  base path not found: $base"
+            continue
+        fi
+
+        if [ -n "$COMBINE_TARGET_VERSION" ]; then
+            if find_upgrade_for "$base"; then
+                vdir="$CU_PARENT/$COMBINE_TARGET_VERSION"
+            else
+                log_error "  no version directory could be located above $base"
+                continue
+            fi
+        elif find_upgrade_for "$base"; then
+            vdir="$CU_PARENT/$CU_VERSION"
+        else
+            log_error "  no version directory could be located above $base"
+            continue
+        fi
+        if [ ! -d "$vdir" ]; then
+            log_error "  version directory does not exist: $vdir   (this tool never creates one)"
+            continue
+        fi
+
+        case " $seen " in
+            *" $vdir "*) continue ;;
+        esac
+        seen="$seen $vdir"
+
+        log_info "  base path      : $base"
+        log_info "  version dir    : $vdir"
+        D_UPGRADE_PARENT=$CU_PARENT
+        D_UPGRADE_VERSION=${vdir##*/}
+        rebuild_ddl_list "$vdir"
+    done
+
+    log_info "  ddl lists rebuilt: $DDL_LISTS_REBUILT   warnings: $DDL_WARNINGS"
     return 0
 }
