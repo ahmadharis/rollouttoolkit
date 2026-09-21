@@ -18,9 +18,9 @@ DDL_P_SEQUENCES=3
 DDL_P_VIEWS=4
 DDL_P_CARRIED=9          # entries the tool did not write and cannot classify
 
-# Tallied by rebuild_ddl_list specifically -- how many include lists it wrote
+# Tallied by rebuild_ddl_list specifically: how many include lists it wrote
 # or removed. Distinct from DDL_PROMOTED, which counts schema files a package
-# apply copied in; --rebuild-ddl-list copies nothing, so that counter would
+# apply copied in. --rebuild-ddl-list copies nothing, so that counter would
 # always read zero there.
 DDL_LISTS_REBUILT=0
 
@@ -526,7 +526,7 @@ promote_ddl() {
 #
 # Uses $D_UPGRADE_PARENT purely as a display name and as ddl_header's fallback
 # search root (sibling version directories to borrow a header from). The
-# caller sets it -- promote_ddl already has it from stage 2; rebuild_ddl_run
+# caller sets it. promote_ddl already has it from stage 2; rebuild_ddl_run
 # sets it itself, since --rebuild-ddl-list derives no destination facts.
 # ---------------------------------------------------------------------------
 rebuild_ddl_list() {

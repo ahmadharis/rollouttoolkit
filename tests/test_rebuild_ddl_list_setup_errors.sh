@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # --rebuild-ddl-list is its own mode: it requires a base path (there is no
 # default, same reasoning as --combine), and it cannot be combined with
-# --combine or --version in one invocation -- each is a complete run with its
+# --combine or --version in one invocation. Each is a complete run with its
 # own tallies and exit status, so doing more than one at once would mean
 # silently picking one.
 set -u

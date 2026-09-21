@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # --rebuild-ddl-list rebuilds the include list from whatever schema files are
-# CURRENTLY in the resolved version directory -- no package, no plan, nothing
+# CURRENTLY in the resolved version directory. No package, no plan, nothing
 # copied in. It resolves the version directory exactly like --combine does
 # (find_upgrade_for, or --target-version to override it), is idempotent, and
 # picks up a file added between two runs without being told about it.

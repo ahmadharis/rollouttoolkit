@@ -146,13 +146,13 @@ Useful after hand editing a record file directly.
 
 ## Manual ddl list rebuild
 
-`--rebuild-ddl-list` keeps a version directory's `001-ddl_alters.sql` (or whatever it's already named) in sync with the schema files (`.tbl`, `.iesql`, `.idx` -- classified by content, never by extension) currently sitting inside it, the same way `--combine` keeps a combined csv in sync with its record files. It resolves each base path to a version directory exactly like `--combine` does (highest present, or `--target-version` to override), and rebuilds that directory's include list from what's there now:
+`--rebuild-ddl-list` keeps a version directory's `001-ddl_alters.sql` (or whatever it's already named) in sync with the schema files (`.tbl`, `.iesql`, `.idx`, classified by content, never by extension) currently sitting inside it, the same way `--combine` keeps a combined csv in sync with its record files. It resolves each base path to a version directory exactly like `--combine` does (highest present, or `--target-version` to override), and rebuilds that directory's include list from what's there now:
 
 ```sh
 ./apply-rollout.sh --rebuild-ddl-list /opt/app/LES/db/data/bootstraponly
 ```
 
-Unlike `promote_ddl` under a real hotfix apply, this never copies a schema file INTO the version directory -- it has no package to copy from. It only rebuilds the list from files already there, so it's the right tool when schema fragments are committed directly into the version directory (the way csv source records are committed into `bootstraponly`) rather than delivered through a package. A base path shared with a `--combine` invocation resolves to the same version directory, without either mode needing to know about the other. `--dry-run` works here too, and it never deletes anything beyond removing a now-empty include list.
+Unlike `promote_ddl` under a real hotfix apply, this never copies a schema file into the version directory. It has no package to copy from. It only rebuilds the list from files already there, so it's the right tool when schema fragments are committed directly into the version directory (the way csv source records are committed into `bootstraponly`) rather than delivered through a package. A base path shared with a `--combine` invocation resolves to the same version directory, without either mode needing to know about the other. `--dry-run` works here too, and it never deletes anything beyond removing a now-empty include list.
 
 ## Configuration
 

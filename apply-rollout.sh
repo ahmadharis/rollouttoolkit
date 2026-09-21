@@ -81,7 +81,7 @@ Options:
                          manual ddl include-list rebuild, processing no
                          directives. Rebuilds 001-ddl_alters.sql (or whatever
                          it is already named) from the schema files currently
-                         in the resolved version directory -- it copies
+                         in the resolved version directory. It copies
                          nothing in, so a schema file that hasn't already
                          been placed there is not this mode's job. A base
                          path shared with a --combine run resolves to the
