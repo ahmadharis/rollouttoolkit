@@ -55,10 +55,18 @@ list_has() {
 }
 
 # list_add <listvar> <word> -- append when not already present.
+#
+# printf -v, not eval. The previous eval-based indirect assignment happened
+# to be safe against a $2 containing quote or command-substitution
+# characters, since parameter expansion inside the string eval parses is
+# not itself re-scanned for further expansion. That safety was incidental
+# to this exact construction, though, easy to lose in a future edit. eval
+# is the wrong tool for a job printf -v already does directly and
+# unambiguously.
 list_add() {
     local cur=${!1}
     list_has "$cur" "$2" && return 0
-    eval "$1=\"\${cur:+\$cur }\$2\""
+    printf -v "$1" '%s' "${cur:+$cur }$2"
 }
 
 # ---------------------------------------------------------------------------
