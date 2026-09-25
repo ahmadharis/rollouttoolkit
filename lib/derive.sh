@@ -356,7 +356,7 @@ derive_from_build_file() {
 # shared files are not recognised as shared, and the run copies build.xml and
 # the patch config into the tree as ordinary files instead of merging them.
 #
-# One find, once per run, outside the per-directive loop (CLAUDE.md).
+# One find, once per run, outside the per-directive loop (performance rule).
 # The destination always wins; this only fills silence.
 # ---------------------------------------------------------------------------
 derive_from_package() {

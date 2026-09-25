@@ -5,8 +5,7 @@
 #
 # Author: Haris Ahmad -- Smart IS
 #
-# SPEC.md defines WHAT this does. IMPLEMENTATION.md defines HOW it is built.
-# README.md documents it for users. CLAUDE.md is the engineering contract.
+# Design and usage docs are maintained with the rollout tool, outside this repo.
 #
 # Six stages, each with one job, handing a defined result to the next:
 #

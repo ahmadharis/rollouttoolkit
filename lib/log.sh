@@ -17,7 +17,7 @@ LOG_SEQ_MAX=100           # bound on the collision-suffix search; see open_log
 # One timestamped line to $LOG_FILE and stdout. Levels: INFO, WARN, ERROR.
 #
 # Hot path: called once per directive. Formats once with printf -v, then writes
-# with two builtin printfs. No tee, no subshell, no date -- see CLAUDE.md.
+# with two builtin printfs. No tee, no subshell, no date -- keeps the hot path fork-free.
 # ---------------------------------------------------------------------------
 log() {
     local level=$1; shift
