@@ -5,7 +5,7 @@
 #
 # Author: Haris Ahmad -- Smart IS
 #
-# Design and usage docs are maintained with the rollout tool, outside this repo.
+# Design and usage docs are maintained with the rollout tool.
 #
 # Six stages, each with one job, handing a defined result to the next:
 #
