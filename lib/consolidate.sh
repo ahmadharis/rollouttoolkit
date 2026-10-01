@@ -511,6 +511,7 @@ combine_run() {
         normalize_path "$base"; base=$NORMALIZED
         if [ ! -d "$base" ]; then
             log_error "  base path not found: $base"
+            CON_FAILED=$((CON_FAILED + 1))
             continue
         fi
 
@@ -519,16 +520,19 @@ combine_run() {
                 vdir="$CU_PARENT/$COMBINE_TARGET_VERSION"
             else
                 log_error "  no version directory could be located above $base"
+                CON_FAILED=$((CON_FAILED + 1))
                 continue
             fi
         elif find_upgrade_for "$base"; then
             vdir="$CU_PARENT/$CU_VERSION"
         else
             log_error "  no version directory could be located above $base"
+            CON_FAILED=$((CON_FAILED + 1))
             continue
         fi
         if [ ! -d "$vdir" ]; then
             log_error "  version directory does not exist: $vdir   (this tool never creates one)"
+            CON_FAILED=$((CON_FAILED + 1))
             continue
         fi
 
@@ -552,7 +556,7 @@ combine_run() {
         done
     done
 
-    if [ "$found" -eq 0 ]; then
+    if [ "$found" -eq 0 ] && [ "$CON_FAILED" -eq 0 ]; then
         log_warn "  no table folder was consolidated."
     else
         log_info "  tables rebuilt: $CON_REBUILT   removed: $CON_REMOVED   warnings: $CON_WARNINGS   failed: $CON_FAILED"
