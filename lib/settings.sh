@@ -18,6 +18,13 @@
 # An absent or partial file degrades to unchanged behaviour. That is what makes
 # the tool safe to run against an unfamiliar target, and it is non-negotiable.
 #
+# ROLLOUT_SETTINGS_FILE overrides where the settings file is read from. The
+# default stays "beside the script" for every existing caller; the override
+# exists for a wrapper that runs this tool from a different location than the
+# one whose settings apply -- a shared copy invoked on behalf of a target
+# repo that carries its own apply-rollout.conf. Consulted only here, at the
+# one place the path is decided.
+#
 # Author: Haris Ahmad -- Smart IS
 # ---------------------------------------------------------------------------
 
@@ -36,7 +43,7 @@ SETTINGS_LOADED=0
 # add a log call in here; there is nowhere for it to go yet.
 # ---------------------------------------------------------------------------
 load_settings() {
-    SETTINGS_FILE="$SCRIPT_DIR/apply-rollout.conf"
+    SETTINGS_FILE=${ROLLOUT_SETTINGS_FILE:-"$SCRIPT_DIR/apply-rollout.conf"}
     [ -f "$SETTINGS_FILE" ] || return 0
 
     local line key value
@@ -140,7 +147,7 @@ log_settings() {
     if [ "$SETTINGS_LOADED" -eq 1 ]; then
         log_info "settings         : $SETTINGS_FILE"
     else
-        log_info "settings         : none (defaults; no file at $SCRIPT_DIR/apply-rollout.conf)"
+        log_info "settings         : none (defaults; no file at $SETTINGS_FILE)"
     fi
 
     if [ "$ROLLOUT_MODE" -eq 1 ]; then
