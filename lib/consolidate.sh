@@ -21,6 +21,7 @@
 CON_REBUILT=0
 CON_REMOVED=0
 CON_WARNINGS=0
+CON_FAILED=0
 
 # ---------------------------------------------------------------------------
 # is_table_dir <dir>
@@ -115,9 +116,11 @@ remove_combined_everywhere() {
         hit=$((hit + 1))
         if [ "$DRY_RUN" -eq 1 ]; then
             log_warn "  consolidate: would remove the combined artifacts for $base from ${vdir##*/} (its folder is gone)"
-        else
-            rm -f "$vdir/$base.csv" "$vdir/$base.ctl" "$vdir/$base.mload" 2>/dev/null
+        elif rm -f "$vdir/$base.csv" "$vdir/$base.ctl" "$vdir/$base.mload" 2>/dev/null; then
             log_warn "  consolidate: removed the combined artifacts for $base from ${vdir##*/} (its folder is gone)"
+        else
+            log_error "  consolidate: could not remove all combined artifacts for $base from ${vdir##*/}"
+            CON_FAILED=$((CON_FAILED + 1))
         fi
         CON_REMOVED=$((CON_REMOVED + 1))
     done
@@ -207,6 +210,7 @@ consolidate_table() {
     if [ "$DRY_RUN" -eq 0 ] && ! table_header "$dir"; then
         log_warn "  consolidate: $base has record files but no readable header; skipped"
         CON_WARNINGS=$((CON_WARNINGS + 1))
+        CON_FAILED=$((CON_FAILED + 1))
         return 1
     fi
 
@@ -218,7 +222,7 @@ consolidate_table() {
     fi
 
     tmp="$out.tmp$$"
-    : >"$tmp" 2>/dev/null || { log_error "  consolidate: cannot write $tmp"; return 1; }
+    : >"$tmp" 2>/dev/null || { log_error "  consolidate: cannot write $tmp"; CON_FAILED=$((CON_FAILED + 1)); return 1; }
     printf '%s\n' "$TBL_HEADER" >>"$tmp"
 
     # Record files in stable order, so re-running the same package over the
@@ -239,20 +243,27 @@ consolidate_table() {
         done <"$f"
     done
 
-    mv -f "$tmp" "$out" 2>/dev/null || { rm -f "$tmp"; log_error "  consolidate: cannot replace $out"; return 1; }
+    mv -f "$tmp" "$out" 2>/dev/null || { rm -f "$tmp"; log_error "  consolidate: cannot replace $out"; CON_FAILED=$((CON_FAILED + 1)); return 1; }
     log_info "  consolidate: rebuilt $base.csv from $count record file(s)"
     CON_REBUILT=$((CON_REBUILT + 1))
 
+    local rc=0
     if [ -f "$ctl" ]; then
-        cp "$ctl" "$vdir/$base.ctl" 2>/dev/null \
-            || log_error "  consolidate: cannot place the control file for $base"
+        if ! cp "$ctl" "$vdir/$base.ctl" 2>/dev/null; then
+            log_error "  consolidate: cannot place the control file for $base"
+            CON_FAILED=$((CON_FAILED + 1))
+            rc=1
+        fi
     else
         log_warn "  consolidate: $base has no control file beside it; none placed"
         CON_WARNINGS=$((CON_WARNINGS + 1))
     fi
 
-    write_descriptor "$vdir" "$base"
-    return 0
+    if ! write_descriptor "$vdir" "$base"; then
+        CON_FAILED=$((CON_FAILED + 1))
+        rc=1
+    fi
+    return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -405,10 +416,10 @@ consolidate_run() {
         fi
     done
 
-    if [ "$CON_REBUILT" -eq 0 ] && [ "$CON_REMOVED" -eq 0 ]; then
+    if [ "$CON_REBUILT" -eq 0 ] && [ "$CON_REMOVED" -eq 0 ] && [ "$CON_FAILED" -eq 0 ]; then
         log_info "  no table needed rebuilding."
     else
-        log_info "  tables rebuilt: $CON_REBUILT   removed: $CON_REMOVED   warnings: $CON_WARNINGS"
+        log_info "  tables rebuilt: $CON_REBUILT   removed: $CON_REMOVED   warnings: $CON_WARNINGS   failed: $CON_FAILED"
     fi
     return 0
 }
@@ -544,7 +555,7 @@ combine_run() {
     if [ "$found" -eq 0 ]; then
         log_warn "  no table folder was consolidated."
     else
-        log_info "  tables rebuilt: $CON_REBUILT   removed: $CON_REMOVED   warnings: $CON_WARNINGS"
+        log_info "  tables rebuilt: $CON_REBUILT   removed: $CON_REMOVED   warnings: $CON_WARNINGS   failed: $CON_FAILED"
     fi
     return 0
 }

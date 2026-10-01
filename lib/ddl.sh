@@ -26,6 +26,7 @@ DDL_LISTS_REBUILT=0
 
 DDL_PROMOTED=0
 DDL_WARNINGS=0
+DDL_FAILED=0
 DDL_LIST_NAME="001-ddl_alters.sql"
 
 # The one deliberate hardcoded value in this pass. Reachable only on a
@@ -443,7 +444,7 @@ ddl_unclassified() {
 #        validate that every entry resolves.
 # ---------------------------------------------------------------------------
 promote_ddl() {
-    DDL_PROMOTED=0; DDL_WARNINGS=0
+    DDL_PROMOTED=0; DDL_WARNINGS=0; DDL_FAILED=0
     [ -n "$D_UPGRADE_PARENT" ] || return 0
     [ -n "$D_UPGRADE_VERSION" ] || return 0
 
@@ -486,6 +487,7 @@ promote_ddl() {
                             else
                                 log_error "  ddl: cannot remove ${D_UPGRADE_VERSION}/$base"
                                 DDL_WARNINGS=$((DDL_WARNINGS + 1))
+                                DDL_FAILED=$((DDL_FAILED + 1))
                             fi
                         fi
                     else
@@ -499,6 +501,7 @@ promote_ddl() {
                         else
                             log_error "  ddl: failed to promote $base into $D_UPGRADE_VERSION"
                             DDL_WARNINGS=$((DDL_WARNINGS + 1))
+                            DDL_FAILED=$((DDL_FAILED + 1))
                         fi
                     fi
                     ;;
@@ -511,6 +514,7 @@ promote_ddl() {
     [ "$DRY_RUN" -eq 1 ] && return 0
 
     rebuild_ddl_list "$vdir"
+    log_info "  ddl: promoted $DDL_PROMOTED   removed $removed   warnings: $DDL_WARNINGS   failed: $DDL_FAILED"
     return 0
 }
 
@@ -563,6 +567,7 @@ rebuild_ddl_list() {
             else
                 log_error "  ddl: could not remove the now-empty ${DDL_LIST##*/}"
                 DDL_WARNINGS=$((DDL_WARNINGS + 1))
+                DDL_FAILED=$((DDL_FAILED + 1))
             fi
         fi
         return 0
@@ -580,6 +585,7 @@ rebuild_ddl_list() {
     else
         log_error "  ddl: could not write ${DDL_LIST##*/}"
         DDL_WARNINGS=$((DDL_WARNINGS + 1))
+        DDL_FAILED=$((DDL_FAILED + 1))
     fi
 
     ddl_validate "$DDL_LIST" "$vdir"
@@ -643,6 +649,6 @@ rebuild_ddl_run() {
         rebuild_ddl_list "$vdir"
     done
 
-    log_info "  ddl lists rebuilt: $DDL_LISTS_REBUILT   warnings: $DDL_WARNINGS"
+    log_info "  ddl lists rebuilt: $DDL_LISTS_REBUILT   warnings: $DDL_WARNINGS   failed: $DDL_FAILED"
     return 0
 }

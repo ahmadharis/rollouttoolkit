@@ -196,6 +196,7 @@ report_tallies_combine() {
     log_info "tables rebuilt   : $CON_REBUILT"
     log_info "tables removed   : $CON_REMOVED"
     log_info "warnings         : $CON_WARNINGS"
+    log_info "failed           : $CON_FAILED"
     return 0
 }
 
@@ -207,6 +208,7 @@ report_tallies_ddl() {
     log_head "summary"
     log_info "ddl lists rebuilt: $DDL_LISTS_REBUILT"
     log_info "warnings         : $DDL_WARNINGS"
+    log_info "failed           : $DDL_FAILED"
     return 0
 }
 
@@ -218,8 +220,16 @@ report_tallies_ddl() {
 #
 # Absent removal targets, skipped deployed-web files and auto-added
 # registrations are NOT failures.
+#
+# T_FAILED covers REPLACE/REMOVE/undo (execute_plan). CON_FAILED and
+# DDL_FAILED cover the two post-processing passes that run outside it --
+# load-data consolidation (consolidate_run, combine_run) and ddl promotion
+# (promote_ddl, rebuild_ddl_run) -- so a failed rebuild there fails the run
+# the same way a failed REPLACE does, instead of exiting 0 regardless.
 # ---------------------------------------------------------------------------
 exit_status() {
     [ "$T_FAILED" -gt 0 ] && return 1
+    [ "$CON_FAILED" -gt 0 ] && return 1
+    [ "$DDL_FAILED" -gt 0 ] && return 1
     return 0
 }
