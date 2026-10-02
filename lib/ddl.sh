@@ -241,14 +241,19 @@ ddl_header() {
     fi
 
     local vdir cand
-    for vdir in $(ls -1 "$D_UPGRADE_PARENT" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -r); do
+    # Unquoted $(...) word-splits on whitespace in a version directory
+    # name, not just on the newlines ls -1 actually uses as a separator.
+    # A while/read loop over process substitution splits only on the
+    # newlines, portable on bash 3.2.
+    while IFS= read -r vdir; do
+        [ -n "$vdir" ] || continue
         for cand in "$D_UPGRADE_PARENT/$vdir"/*ddl_alters*.sql; do
             [ -f "$cand" ] || continue
             [ "$cand" = "$f" ] && continue
             ddl_header "$cand"
             [ -n "$DDL_HEADER" ] && return 0
         done
-    done
+    done < <(ls -1 "$D_UPGRADE_PARENT" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n -r)
 
     DDL_HEADER=$DDL_FALLBACK_HEADER
     log_warn "  ddl: no existing include list to take a header from; using the default header"
@@ -278,7 +283,12 @@ ddl_scan_version() {
     local vdir=$1 f key i n found
     DDL_K=(); DDL_F=()
 
-    for f in $(ls -1 "$vdir" 2>/dev/null | sort); do
+    # Unquoted $(...) word-splits on whitespace in a filename, not just on
+    # the newlines ls -1 actually separates entries with. while/read over
+    # process substitution runs in this same shell (so DDL_K/DDL_F below
+    # still land in the caller's scope) and splits only on newlines.
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
         [ -f "$vdir/$f" ] || continue
         case $f in *ddl_alters*.sql) continue ;; esac
         ddl_classify "$vdir/$f" || continue
@@ -297,7 +307,7 @@ ddl_scan_version() {
             DDL_F[$found]="${DDL_F[$found]}
 $DDL_PHASE|$f"
         fi
-    done
+    done < <(ls -1 "$vdir" 2>/dev/null | sort)
     return 0
 }
 
@@ -341,7 +351,9 @@ ddl_key_files() {
 # ddl_write_list <list-path> <header>
 #
 # Header, then one group per table with a blank line between groups. Entries
-# inside a group are phase-ordered; the carried-forward group is emitted last.
+# inside a group are phase-ordered; the carried-forward group (key
+# " carried-forward ", padded with spaces no real table name can contain)
+# is emitted last.
 # ---------------------------------------------------------------------------
 ddl_write_list() {
     local path=$1 header=$2 tmp="$1.tmp$$"
@@ -352,7 +364,7 @@ ddl_write_list() {
 
     i=0; n=${#DDL_K[@]}
     while [ "$i" -lt "$n" ]; do
-        if [ -n "${DDL_F[$i]}" ] && [ "${DDL_K[$i]}" != "carried-forward" ]; then
+        if [ -n "${DDL_F[$i]}" ] && [ "${DDL_K[$i]}" != " carried-forward " ]; then
             ddl_sort_group "${DDL_K[$i]}" "${DDL_F[$i]}"
             printf '\n' >>"$tmp"
             printf '%s\n' "$DDL_SORTED" | while IFS= read -r line; do
@@ -364,7 +376,7 @@ ddl_write_list() {
 
     i=0
     while [ "$i" -lt "$n" ]; do
-        if [ "${DDL_K[$i]}" = "carried-forward" ] && [ -n "${DDL_F[$i]}" ]; then
+        if [ "${DDL_K[$i]}" = " carried-forward " ] && [ -n "${DDL_F[$i]}" ]; then
             printf '\n' >>"$tmp"
             printf '%s\n' "${DDL_F[$i]}" | while IFS= read -r line; do
                 line=${line#*|}
@@ -544,7 +556,7 @@ rebuild_ddl_list() {
 
     if [ -n "$DDL_KEEP" ]; then
         local n=${#DDL_K[@]}
-        DDL_K[$n]="carried-forward"
+        DDL_K[$n]=" carried-forward "
         DDL_F[$n]=$(printf '%s' "$DDL_KEEP" | sed "s/^/9|/")
     fi
 

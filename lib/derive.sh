@@ -130,8 +130,12 @@ score_refs_candidate() {
 derive_refs_root() {
     local candidates bf dir cfg best=-1 first=""
 
-    # One spawn, in stage 2 only -- never in the per-directive loop.
-    candidates=$(find "$TARGET_DIR" -name .git -prune -o -type f -name 'build.xml' -print 2>/dev/null)
+    # One spawn, in stage 2 only -- never in the per-directive loop. Sorted
+    # so two candidates tying on score (line 151 below only replaces the
+    # best on a STRICTLY higher score) resolve the same way regardless of
+    # find's platform-dependent traversal order -- otherwise the same tree
+    # could derive a different refs root on macOS vs Linux vs Git Bash.
+    candidates=$(find "$TARGET_DIR" -name .git -prune -o -type f -name 'build.xml' -print 2>/dev/null | sort)
     [ -n "$candidates" ] || return 1
 
     split_lines "$candidates"
