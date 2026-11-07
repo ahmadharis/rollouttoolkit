@@ -379,7 +379,7 @@ reconcile() {
     log_head "registration"
 
     for patch in $patches; do
-        local inc_delivered="" asset_delivered="" pkg_cfg="" pkg_build=""
+        local inc_delivered="" asset_delivered="" asset_removed="" pkg_cfg="" pkg_build=""
 
         # The shared files FIRST, before anything is classified: the kinds that
         # tell an asset from a source are read out of the destination's copy
@@ -414,6 +414,13 @@ reconcile() {
                         if [ -n "$kind" ] && list_has "$D_ASSET_KINDS" "$kind"; then
                             asset_delivered="$asset_delivered$rel
 "
+                            # The assets this package REMOVEs are kept apart: a
+                            # REMOVE accounts for the file, so the copy entry
+                            # that still names it can go (register_assets).
+                            if [ "${P_KIND[$i]}" = "REMOVE" ]; then
+                                asset_removed="$asset_removed$rel
+"
+                            fi
                         elif [ -n "$kind" ] && list_has "$D_SOURCE_KINDS" "$kind"; then
                             to_target_include "" "$rel"; inc_delivered="$inc_delivered$TARGET_INC
 "
@@ -439,7 +446,7 @@ reconcile() {
         done
 
         register_includes "$patch" "$pkg_cfg" "$inc_delivered"
-        register_assets   "$patch" "$pkg_build" "$asset_delivered"
+        register_assets   "$patch" "$pkg_build" "$asset_delivered" "$asset_removed"
     done
 
     if [ "$REG_CHANGES" -eq 0 ]; then
@@ -536,14 +543,19 @@ $patch"[/\\]*)
 }
 
 # ---------------------------------------------------------------------------
-# register_assets <patch> <package-build> <delivered-assets>
+# register_assets <patch> <package-build> <delivered-assets> [<removed-assets>]
 #
 # Regenerate copy entries for the files THIS package delivers. Entries for
 # files the package does not ship are left untouched, which is what makes the
 # outcome order-independent -- a package cannot drop assets it knows nothing of.
+#
+# The one exception on the way in is a file the package REMOVEs. A REMOVE is
+# the package accounting for that file, exactly as a delivery is, so a copy
+# entry that still names it is dropped. Left behind it points at nothing, and a
+# build that copies with failonerror stops on the first one.
 # ---------------------------------------------------------------------------
 register_assets() {
-    local patch=$1 pkg_build=$2 delivered=$3
+    local patch=$1 pkg_build=$2 delivered=$3 removed=${4:-}
     local rel base i entries="" ow fe have
 
     # Undoing removes this patch's assets, so its copy entries go with them --
@@ -552,6 +564,12 @@ register_assets() {
     if [ "$UNDO" -eq 1 ]; then
         remove_stale_copies "$patch" "$delivered"
         return 0
+    fi
+
+    # Applying: drop the copy entries for the assets this run REMOVEs. Only
+    # those -- an entry for a file nothing in this package names is left alone.
+    if [ -n "$removed" ]; then
+        remove_stale_copies "$patch" "$removed" || true
     fi
 
     [ -n "$delivered" ] || return 0
@@ -588,6 +606,10 @@ register_assets() {
     split_lines "$delivered"
     for rel in ${SPLIT[@]+"${SPLIT[@]}"}; do
         [ -n "$rel" ] || continue
+        # A file this run REMOVEs is in the delivered list too, but it is not an
+        # asset to register: adding an entry for it would undo the drop above,
+        # and would register a file that is about to be gone.
+        if ships_include "" "$removed" "$rel"; then continue; fi
         base=${rel##*/}
 
         have=0
@@ -633,11 +655,44 @@ ${COPY_ATTR_IND}failonerror=\"$fe\"/>
 
 
 # ---------------------------------------------------------------------------
-# remove_stale_copies <patch> <delivered-assets>
+# copy_source_gone <absolute-path>
 #
-# Drop the build file's copy entries for the assets THIS PACKAGE delivers,
-# whose file is gone. The counterpart of the auto-add on the apply side: undo
-# of a patch's rollout de-registers its own assets, and nothing else.
+# Is this copy entry's source absent once the run is complete?
+#
+# Undo reads the disk, as it always has. Applying has to PREDICT in a dry run,
+# because a REMOVE has not happened yet: the file is still there, and a preview
+# that read the disk would never announce the entries the real run drops. A
+# file the run delivers is never gone, whatever the disk says at that moment.
+# ---------------------------------------------------------------------------
+copy_source_gone() {
+    local path=$1 i=0 removing=0
+
+    if [ "$UNDO" -eq 1 ]; then
+        [ ! -f "$path" ]
+        return
+    fi
+
+    while [ "$i" -lt "$P_COUNT" ]; do
+        if [ "${P_DEST[$i]}" = "$path" ] && [ "${P_DISP[$i]}" = "apply" ]; then
+            case ${P_KIND[$i]} in
+                REPLACE) return 1 ;;
+                REMOVE)  removing=1 ;;
+            esac
+        fi
+        i=$((i + 1))
+    done
+
+    [ ! -f "$path" ] && return 0
+    [ "$DRY_RUN" -eq 1 ] && [ "$removing" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
+# remove_stale_copies <patch> <accounted-assets>
+#
+# Drop the build file's copy entries for the assets THIS PACKAGE accounts for,
+# whose file is gone: the ones it delivers (undo of its rollout) and the ones it
+# REMOVEs (apply). The counterpart of the auto-add on the apply side: a rollout
+# de-registers its own assets, and nothing else.
 #
 # Two conditions, both required. Under the patch directory is not enough on its
 # own: several rollouts deliver into the same patch, and a destination can
@@ -673,7 +728,7 @@ remove_stale_copies() {
                 case $abs in
                     "$D_PATCH_SRC/$patch"/*)
                         rel=${abs#"$D_PATCH_SRC"/}
-                        if [ ! -f "$abs" ] && ships_include "" "$delivered" "$rel"; then
+                        if copy_source_gone "$abs" && ships_include "" "$delivered" "$rel"; then
                             drop=1
                         fi
                         ;;

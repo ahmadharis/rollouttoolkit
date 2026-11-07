@@ -192,7 +192,7 @@ tests/run.sh combine      # run only tests whose filename contains "combine"
 
 A small dependency free suite in plain bash. Each `tests/test_*.sh` builds its own fixture in a temp directory, runs an isolated copy of the tool against it, checks the output and exit code, and cleans up. `tests/run.sh` runs all of them and exits non-zero if anything failed.
 
-Covered: literal resolution under rollout, removals, `--dry-run` leaving the tree untouched, collision detection, an apply then undo round trip, both classes of setup error, the combine rebuild and its header mismatch handling, its required arguments, its refusal to sweep a whole tree by default, and the hotfix path correction itself, exercised against a real minimal build file and patch config.
+Covered: literal resolution under rollout, removals, `--dry-run` leaving the tree untouched, collision detection, an apply then undo round trip, both classes of setup error, the combine rebuild and its header mismatch handling, its required arguments, its refusal to sweep a whole tree by default, the hotfix path correction itself, exercised against a real minimal build file and patch config, and dropping a build file copy entry when the package removes the asset it names.
 
 ## License
 
